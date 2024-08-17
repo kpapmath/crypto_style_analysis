@@ -67,7 +67,7 @@ def style_analysis_quadratic_programming(data: pd.DataFrame, index_columns: list
     G = matrix(- np.eye(n))
     h = matrix(np.append(np.zeros(n - 1), [1], axis=0))
     # Solve and retrieve solution
-    solvers.options['show_progress'] = True
+    solvers.options['show_progress'] = False
     sol = qp(Q, r, G, h, A, b)['x']
     return np.array(sol)
 
@@ -162,7 +162,7 @@ def rolling_style_analysis(data: pd.DataFrame, index_columns: list, target_varia
 if __name__ == '__main__':
     base_path = os.getenv('BASE_PATH')
     df = pd.read_csv(f'{base_path}/processed_data_from_2019-01-05_to_2024-07-31.csv', parse_dates=['Date'])
-    cols = ['log_return_BTC-USD', 'log_return_ETH-USD', 'log_return_GC=F'] # [col for col in df.columns if 'first_diff' in col or ('^' in col and 'log_return' in col)] +
-    target = 'log_return_BNB-USD'
+    cols = ['log_return_BTC-USD', 'log_return_ETH-USD', 'log_return_GC=F'] + [col for col in df.columns if ('^' in col and 'log_return' in col)]
+    target = 'log_return_XRP-USD'
     sol = rolling_style_analysis(data=df, index_columns=cols, target_variable=target, window=120, step=1)
     a = 3
