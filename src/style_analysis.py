@@ -68,7 +68,12 @@ def style_analysis_quadratic_programming(data: pd.DataFrame, index_columns: list
     h = matrix(np.append(np.zeros(n - 1), [1], axis=0))
     # Solve and retrieve solution
     solvers.options['show_progress'] = False
-    sol = qp(Q, r, G, h, A, b)['x']
+    # remove argument method='mosek' to use the default solver if mosek is not installed
+    try:
+        sol = qp(Q, r, G, h, A, b, method='mosek')['x']
+    except Exception as e:
+        print(e)
+        sol = qp(Q, r, G, h, A, b)['x']
     return np.array(sol)
 
 
