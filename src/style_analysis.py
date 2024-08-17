@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
-from cvxopt import matrix
+from cvxopt import matrix, solvers
+from cvxopt.coneprog import coneqp
 from cvxopt.solvers import qp
 from dotenv import load_dotenv, find_dotenv
 
@@ -51,10 +52,12 @@ def style_analysis_quadratic_programming(data: pd.DataFrame, index_columns: list
     """
 
     q_columns = index_columns + [target_variable]
-    covariance_matrix = data[q_columns].cov().values
+    covariance_matrix = data[q_columns].cov().to_numpy()
     n = len(covariance_matrix)
     r = matrix(np.zeros(n))
     Q = matrix(covariance_matrix)
+    # eigenvalues = np.linalg.eigvals(covariance_matrix)
+    # print("Eigenvalues:", eigenvalues)
     # constraints
     a = np.ones((n, 2))
     a[:-1, 1] = 0
@@ -64,7 +67,8 @@ def style_analysis_quadratic_programming(data: pd.DataFrame, index_columns: list
     G = matrix(- np.eye(n))
     h = matrix(np.append(np.zeros(n - 1), [1], axis=0))
     # Solve and retrieve solution
-    sol = qp(-Q, r, G, h, A, b)['x']
+    solvers.options['show_progress'] = True
+    sol = qp(Q, r, G, h, A, b)['x']
     return np.array(sol)
 
 
