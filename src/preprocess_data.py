@@ -13,7 +13,7 @@ def create_dir() -> str:
     :return: path to the directory
     """
     current_dir = os.getcwd()
-    current_dir = str(Path(current_dir).parents[0])
+    # current_dir = str(Path(current_dir).parents[0])
     path = os.path.join(current_dir, 'data')
     if not os.path.exists(path):
         os.makedirs(path)
@@ -125,33 +125,31 @@ def preprocess_yield_data(path: str = 'data/',
 def preprocess_crypto_index_data(path: str,
                                  from_date: str = '2019-01-04',
                                  to_date: str = '2024-07-31',
-                                 characteristic: str = 'index_values'
+                                 tickers: list = []
                                  ) -> pd.DataFrame:
     """
     This function preprocesses the crypto index data
     :param path: the path to the data
     :param from_date: date to start receiving the data (format: 'YYYY-MM-DD')
     :param to_date: date to end receiving the data (format: 'YYYY-MM-DD')
-    :param characteristic: a string to identify the type of data (crypto usd value or index value)
+    :param tickers: the list of tickers to include in the data
     :return: the preprocessed data containing the crypto or index data (Close price)
     """
     df1 = pd.DataFrame()
-    for file in os.listdir(path):
-        if characteristic in file:
-            df_temp = load_data(path + '/' + file, from_date=from_date, to_date=to_date)
-            df_temp = df_temp.resample('D', on='Date').mean()
-            df_temp.ffill(inplace=True)
-            df_temp['Date'] = df_temp.index
-            df_temp.reset_index(drop=True, inplace=True)
-            df_temp = df_temp[['Date', 'Close']]
-            if characteristic == '^':
-                df_temp.rename(columns={'Close': file.split('^')[1].split('.')[0]}, inplace=True)
-            else:
-                df_temp.rename(columns={'Close': file.split('_')[-1].split('.')[0]}, inplace=True)
-            if df1.empty:
-                df1 = df_temp
-                continue
-            df1 = pd.merge_ordered(df1, df_temp, on='Date')
+    files = os.listdir(path)
+    filtered_files = [file for file in files if any(ticker in file for ticker in tickers)]
+    for file in filtered_files:
+        df_temp = load_data(path + '/' + file, from_date=from_date, to_date=to_date)
+        df_temp = df_temp.resample('D', on='Date').mean()
+        df_temp.ffill(inplace=True)
+        df_temp['Date'] = df_temp.index
+        df_temp.reset_index(drop=True, inplace=True)
+        df_temp = df_temp[['Date', 'Close']]
+        df_temp.rename(columns={'Close': file.split('_')[-1].split('.')[0]}, inplace=True)
+        if df1.empty:
+            df1 = df_temp
+            continue
+        df1 = pd.merge_ordered(df1, df_temp, on='Date')
     return df1
 
 
@@ -197,28 +195,33 @@ def dataframe_for_process(path: str, from_date: str = '2019-01-03',
             f'{path}/processed_data_from_{from_date}_to_{to_date}.csv', index=False)
     return df3
 
+
 def crypto_series_to_process(path: str, from_date: str = '2019-01-03',
-                              to_date: str = '2024-07-31', save: bool = True) -> pd.DataFrame:
+                              to_date: str = '2024-07-31', save: bool = True, tickers: list = None) -> pd.DataFrame:
     """
     This function preprocesses the data and saves it to a csv file if save is True
     :param path: (str) The path to the data directory
     :param from_date: (str) The start date for the data (format: 'YYYY-MM-DD')
     :param to_date: (str) The end date for the data (format: 'YYYY-MM-DD')
     :param save: (bool) If True, the data is saved to a csv file
+    :param tickers: (list) The list of tickers to include in the data
     :return: df (pd.DataFrame) The preprocessed data and saved to a csv file
     """
-    df_crypto = preprocess_crypto_index_data(path=path, from_date=from_date, to_date=to_date,
-                                             characteristic='crypto_values')
-    for col in df_crypto.columns:
+    if tickers is None:
+        raise ValueError('Please provide a list of tickers to include in the data')
+
+    df = preprocess_crypto_index_data(path=path, from_date=from_date, to_date=to_date, tickers=tickers)
+
+    for col in df.columns:
         if "Date" in col:
             continue
-        df_crypto = log_return(df_crypto, col)
+        df = log_return(df, col)
     if save:
         from_date = pd.to_datetime(from_date) + pd.Timedelta(days=2)
         from_date = from_date.strftime('%Y-%m-%d')
-        df_crypto[df_crypto['Date'] >= from_date].to_csv(
+        df[df['Date'] >= from_date].to_csv(
             f'{path}/processed_crypto_data_from_{from_date}_to_{to_date}.csv', index=False)
-    return df_crypto
+    return df
 
 if __name__ == '__main__':
     base_path = os.getenv('BASE_PATH')
