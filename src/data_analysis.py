@@ -30,7 +30,7 @@ def create_adf_result_data_frame(data: pd.DataFrame) -> pd.DataFrame:
     """
     adf_results = pd.DataFrame()
     for column in data.columns:
-        if ('log_return' in column or 'first_diff' in column) and ('SOL' not in column):
+        if ('log_return' in column or 'first_diff' in column):
             adf_results[column] = perform_adf_test(data[column])
         else:
             continue
