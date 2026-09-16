@@ -1,9 +1,15 @@
 import pandas as pd
 import numpy as np
 import os
-from cvxopt import matrix, solvers
-from cvxopt.coneprog import coneqp
-from cvxopt.solvers import qp
+try:
+    from cvxopt import matrix, solvers
+    from cvxopt.solvers import qp
+except ImportError:
+    matrix = None
+    solvers = None
+    qp = None
+
+from scipy.optimize import minimize
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
@@ -54,27 +60,45 @@ def style_analysis_quadratic_programming(data: pd.DataFrame, index_columns: list
     q_columns = index_columns + [target_variable]
     covariance_matrix = data[q_columns].cov().to_numpy()
     n = len(covariance_matrix)
-    r = matrix(np.zeros(n))
-    Q = matrix(covariance_matrix)
-    # eigenvalues = np.linalg.eigvals(covariance_matrix)
-    # print("Eigenvalues:", eigenvalues)
-    # constraints
-    a = np.ones((n, 2))
-    a[:-1, 1] = 0
-    a[-1, 0] = 0
-    A = matrix(a).T
-    b = matrix([1.0, -1.0])
-    G = matrix(- np.eye(n))
-    h = matrix(np.append(np.zeros(n - 1), [1], axis=0))
-    # Solve and retrieve solution
-    solvers.options['show_progress'] = False
-    # remove argument method='mosek' to use the default solver if mosek is not installed
-    try:
-        sol = qp(Q, r, G, h, A, b, method='mosek')['x']
-    except Exception as e:
-        print(e)
-        sol = qp(Q, r, G, h, A, b)['x']
-    return np.array(sol)
+    if qp is not None:
+        r = matrix(np.zeros(n))
+        Q = matrix(covariance_matrix)
+        # constraints
+        a = np.ones((n, 2))
+        a[:-1, 1] = 0
+        a[-1, 0] = 0
+        A = matrix(a).T
+        b = matrix([1.0, -1.0])
+        G = matrix(-np.eye(n))
+        h = matrix(np.append(np.zeros(n - 1), [1], axis=0))
+        solvers.options['show_progress'] = False
+        try:
+            solution = qp(Q, r, G, h, A, b, method='mosek')['x']
+        except Exception:
+            solution = qp(Q, r, G, h, A, b)['x']
+        return np.array(solution)
+
+    # CVXOPT does not publish wheels for every Python/macOS combination. The
+    # equivalent SLSQP formulation keeps notebooks usable in those environments:
+    # benchmark weights are non-negative, sum to one, and the target coefficient
+    # remains fixed at -1.
+    factor_count = n - 1
+
+    def objective(weights):
+        coefficients = np.append(weights, -1.0)
+        return coefficients @ covariance_matrix @ coefficients
+
+    result = minimize(
+        objective,
+        x0=np.full(factor_count, 1.0 / factor_count),
+        method='SLSQP',
+        bounds=[(0.0, 1.0)] * factor_count,
+        constraints={'type': 'eq', 'fun': lambda weights: weights.sum() - 1.0},
+        options={'ftol': 1e-12, 'maxiter': 1000},
+    )
+    if not result.success:
+        raise RuntimeError(f'Style-analysis optimization failed: {result.message}')
+    return np.append(result.x, -1.0).reshape(-1, 1)
 
 
 def style_analysis_confidence_intervals(data: pd.DataFrame, index_columns: list,

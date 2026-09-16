@@ -35,7 +35,7 @@ def load_data(file_path: str,
     :param to_date: date to end receiving the data (format: 'YYYY-MM-DD')
     :return: dataframe containing the data form date to date
     """
-    df = pd.read_csv(file_path, sep=sep, parse_dates=[date_col], date_format='mixed')
+    df = pd.read_csv(file_path, sep=sep, parse_dates=[date_col])
     return df[(df[date_col] >= from_date) & (df[date_col] <= to_date)]
 
 
